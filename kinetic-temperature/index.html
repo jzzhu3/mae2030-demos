@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Temperature &amp; Molecular Motion</title>
+<style>
+  :root{
+    --navy:#1E2A4A;
+    --orange:#E08A2B;
+    --ice:#EEF2F8;
+    --cream:#FBEEE0;
+    --ink:#25303f;
+    --line:#d6ddea;
+    --head:"Bookman Old Style","Bookman",Georgia,serif;
+    --body:"Calibri","Segoe UI",system-ui,sans-serif;
+    --eq:"Cambria","Georgia",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:var(--body);
+    color:var(--ink);
+    background:var(--ice);
+    -webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;
+    min-height:100%;
+  }
+  header{
+    background:var(--navy);color:#fff;
+    padding:14px 22px;
+    display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  }
+  header h1{
+    font-family:var(--head);font-weight:700;
+    font-size:clamp(19px,2.4vw,27px);margin:0;letter-spacing:.2px;
+  }
+  header .sub{color:#b9c6e0;font-size:clamp(12px,1.4vw,15px)}
+  .wrap{
+    flex:1;display:grid;
+    grid-template-columns:minmax(0,1.35fr) minmax(280px,.9fr);
+    gap:18px;padding:18px 22px;align-items:stretch;
+  }
+  @media(max-width:880px){ .wrap{grid-template-columns:1fr} }
+
+  .card{
+    background:#fff;border:1px solid var(--line);border-radius:16px;
+    padding:14px;display:flex;flex-direction:column;min-width:0;
+    box-shadow:0 1px 0 rgba(30,42,74,.03);
+  }
+  .card h2{
+    font-family:var(--head);font-size:15px;font-weight:700;
+    margin:2px 4px 10px;color:var(--navy);letter-spacing:.2px;
+  }
+
+  /* particle stage */
+  #stageWrap{padding:12px}
+  .stage-inner{position:relative;width:100%;border-radius:12px;overflow:hidden;background:var(--ice);border:1px solid var(--line)}
+  canvas{display:block;width:100%;height:auto}
+  .stage-tag{
+    position:absolute;top:10px;right:12px;
+    font-family:var(--head);font-weight:700;font-size:15px;
+    padding:2px 10px;border-radius:999px;background:rgba(255,255,255,.85);
+    transition:color .25s ease;
+  }
+
+  /* controls */
+  .ctrl{margin:6px 4px}
+  .ctrl .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .ctrl label{font-weight:600;font-size:14px}
+  .tval{font-family:var(--eq);font-size:20px;font-weight:700;color:var(--orange)}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:10px;border-radius:999px;
+    background:linear-gradient(90deg,#2c3a5e 0%,#5b6c94 32%,#e6a15a 72%,var(--orange) 100%);
+    outline:none;margin:2px 0 4px;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:26px;height:26px;border-radius:50%;
+    background:#fff;border:3px solid var(--navy);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.25);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:26px;height:26px;border-radius:50%;background:#fff;border:3px solid var(--navy);cursor:pointer;
+  }
+  .scaleends{display:flex;justify-content:space-between;font-size:12px;color:#8592a8;margin-top:-2px}
+  .scaleends b:first-child{color:var(--navy)}
+  .scaleends b:last-child{color:var(--orange)}
+
+  .presets{display:flex;gap:8px;margin:12px 4px 2px}
+  .presets button, .toggle{
+    font-family:var(--body);font-size:13px;font-weight:600;cursor:pointer;
+    border:1px solid var(--line);background:#fff;color:var(--navy);
+    border-radius:10px;padding:8px 12px;flex:1;transition:.15s;
+  }
+  .presets button:hover{background:var(--ice)}
+  .presets button.cool{border-color:var(--navy)}
+  .presets button.hot{border-color:var(--orange);color:var(--orange)}
+  .toggle{flex:none;display:inline-flex;align-items:center;gap:7px;margin:12px 4px 0}
+  .toggle input{width:16px;height:16px;accent-color:var(--orange)}
+
+  /* readouts */
+  .readouts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 2px 2px}
+  .metric{background:var(--ice);border-radius:12px;padding:10px 12px}
+  .metric .k{font-size:12px;color:#6b7891;font-weight:600}
+  .metric .v{font-family:var(--eq);font-size:22px;font-weight:700;color:var(--navy);line-height:1.15}
+  .metric .v .u{font-size:13px;color:#8592a8;font-weight:600}
+  .bar{height:7px;border-radius:999px;background:#dfe6f1;margin-top:7px;overflow:hidden}
+  .bar>span{display:block;height:100%;border-radius:999px;background:var(--orange);transition:width .12s linear}
+
+  /* law rail (cream GoodNotes-style) */
+  .rail{
+    background:var(--cream);border:1px solid #f0dcc4;border-left:5px solid var(--orange);
+    border-radius:10px;padding:12px 14px;margin:14px 2px 2px;
+  }
+  .rail .eq{font-family:var(--eq);font-size:19px;color:var(--navy);margin:2px 0 4px}
+  .rail .eq small{font-size:13px;color:#9a7a4e}
+  .rail p{margin:6px 0 0;font-size:13px;color:#6b5636;line-height:1.45}
+
+  /* distribution */
+  #distWrap{padding:12px}
+  .disthint{font-size:12.5px;color:#6b7891;margin:8px 6px 2px;line-height:1.4}
+  footer{padding:6px 22px 16px;color:#8592a8;font-size:12px}
+  footer b{color:var(--navy)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Temperature &amp; Molecular Motion</h1>
+  <span class="sub">MAE 2030 · kinetic theory of gases — drag the temperature and watch the molecules</span>
+</header>
+
+<div class="wrap">
+  <!-- LEFT: stage + controls -->
+  <section class="card" id="stageWrap">
+    <h2>Gas in a box</h2>
+    <div class="stage-inner">
+      <canvas id="stage" width="720" height="440"></canvas>
+      <span class="stage-tag" id="stageTag">cool</span>
+    </div>
+
+    <div class="ctrl">
+      <div class="row">
+        <label for="temp">Temperature</label>
+        <span class="tval"><span id="tempVal">120</span> K</span>
+      </div>
+      <input id="temp" type="range" min="40" max="1000" value="120" step="1">
+      <div class="scaleends"><b>cool</b><b>hot</b></div>
+    </div>
+
+    <div class="presets">
+      <button class="cool" data-t="120">Cool · 120 K</button>
+      <button data-t="300">Room · 300 K</button>
+      <button class="hot" data-t="900">Hot · 900 K</button>
+    </div>
+    <label class="toggle"><input type="checkbox" id="trails"> motion trails</label>
+  </section>
+
+  <!-- RIGHT: readouts + law + distribution -->
+  <section class="card">
+    <h2>What changes with T</h2>
+
+    <div class="readouts">
+      <div class="metric">
+        <div class="k">Average kinetic energy&nbsp; ⟨KE⟩</div>
+        <div class="v"><span id="keVal">1.0</span><span class="u">× (∝ T)</span></div>
+        <div class="bar"><span id="keBar" style="width:12%"></span></div>
+      </div>
+      <div class="metric">
+        <div class="k">rms speed&nbsp; v<sub>rms</sub></div>
+        <div class="v"><span id="vVal">1.0</span><span class="u">× (∝ √T)</span></div>
+        <div class="bar"><span id="vBar" style="width:35%"></span></div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div class="eq">⟨KE⟩ = <sup>3</sup>&frasl;<sub>2</sub> k<sub>B</sub>T &nbsp;<small>(per molecule)</small></div>
+      <div class="eq">v<sub>rms</sub> = √( 3k<sub>B</sub>T / m ) &nbsp; ⟹ &nbsp; v<sub>rms</sub> ∝ √T</div>
+      <p>Double the temperature ⟹ double the average KE, but speed rises only by √2 ≈ 1.41×. That's why the molecules don't look twice as fast.</p>
+    </div>
+
+    <h2 style="margin-top:16px">Speed distribution</h2>
+    <div id="distWrap" style="padding:0">
+      <canvas id="dist" width="620" height="220"></canvas>
+    </div>
+    <div class="disthint">Bars = live molecule speeds · curve = Maxwell–Boltzmann for the current T. Heat the gas and the whole distribution shifts right <em>and</em> spreads out. <span style="color:#9a7a4e">(2-D simulation)</span></div>
+  </section>
+</div>
+
+<footer><b>Note:</b> the on-screen color goes navy → orange with temperature, matching the "cool / hot" figure. Speeds scale as √T, so the visual pace is physically honest.</footer>
+
+<script>
+(function(){
+  "use strict";
+  const NAVY=[30,42,74], ORANGE=[224,138,43];
+  const Tmin=40, Tmax=1000;
+
+  // ---- simulation state ----
+  const N=42;
+  const parts=[];
+  let T=120;            // kelvin (display)
+  let boxW=720, boxH=440, R=9;
+  const K_SIM=0.010;    // maps display-T (K) to sim <v^2>: <v^2> = 2*K_SIM*T  (m=1)
+  let trails=false;
+
+  function speedScale(t){ return Math.sqrt(2*K_SIM*t); } // sigma-ish characteristic speed
+
+  function init(){
+    const s=speedScale(T);
+    for(let i=0;i<N;i++){
+      // sample a 2-D Maxwell velocity: each component ~ Normal(0, s)
+      const [gx,gy]=gauss2();
+      parts.push({
+        x:R+Math.random()*(boxW-2*R),
+        y:R+Math.random()*(boxH-2*R),
+        vx:gx*s, vy:gy*s
+      });
+    }
+  }
+  function gauss2(){ // Box–Muller, two independent standard normals
+    let u=Math.random()||1e-9, v=Math.random();
+    const m=Math.sqrt(-2*Math.log(u));
+    return [m*Math.cos(2*Math.PI*v), m*Math.sin(2*Math.PI*v)];
+  }
+
+  // rescale all velocities so <v^2> tracks the new temperature (exact for Maxwell)
+  function setTemperature(newT){
+    const oldMean=meanV2();
+    T=newT;
+    const targetMean=2*K_SIM*T;                 // <v^2> target
+    const ratio = oldMean>1e-9 ? Math.sqrt(targetMean/oldMean) : 1;
+    for(const p of parts){ p.vx*=ratio; p.vy*=ratio; }
+  }
+  function meanV2(){
+    let s=0; for(const p of parts) s+=p.vx*p.vx+p.vy*p.vy; return s/parts.length;
+  }
+
+  // ---- physics step ----
+  function step(dt){
+    for(const p of parts){
+      p.x+=p.vx*dt; p.y+=p.vy*dt;
+      if(p.x<R){p.x=R;p.vx=Math.abs(p.vx);} else if(p.x>boxW-R){p.x=boxW-R;p.vx=-Math.abs(p.vx);}
+      if(p.y<R){p.y=R;p.vy=Math.abs(p.vy);} else if(p.y>boxH-R){p.y=boxH-R;p.vy=-Math.abs(p.vy);}
+    }
+    // equal-mass elastic collisions (O(n^2), fine for N~42)
+    for(let i=0;i<N;i++){
+      for(let j=i+1;j<N;j++){
+        const a=parts[i],b=parts[j];
+        let dx=b.x-a.x, dy=b.y-a.y;
+        let d2=dx*dx+dy*dy; const min=2*R;
+        if(d2<min*min && d2>1e-9){
+          const d=Math.sqrt(d2), nx=dx/d, ny=dy/d;
+          const rvx=a.vx-b.vx, rvy=a.vy-b.vy;
+          const rel=rvx*nx+rvy*ny;
+          if(rel>0){ // approaching -> exchange normal component
+            a.vx-=rel*nx; a.vy-=rel*ny;
+            b.vx+=rel*nx; b.vy+=rel*ny;
+          }
+          const overlap=(min-d)/2;   // separate so they don't stick
+          a.x-=nx*overlap; a.y-=ny*overlap;
+          b.x+=nx*overlap; b.y+=ny*overlap;
+        }
+      }
+    }
+  }
+
+  // ---- rendering ----
+  const cv=document.getElementById('stage'), cx=cv.getContext('2d');
+  function tempFrac(){ return Math.min(1,Math.max(0,(T-Tmin)/(Tmax-Tmin))); }
+  function lerpCol(f){
+    const r=Math.round(NAVY[0]+(ORANGE[0]-NAVY[0])*f);
+    const g=Math.round(NAVY[1]+(ORANGE[1]-NAVY[1])*f);
+    const b=Math.round(NAVY[2]+(ORANGE[2]-NAVY[2])*f);
+    return [r,g,b];
+  }
+  function draw(){
+    const f=tempFrac(), col=lerpCol(f);
+    const rgb=`rgb(${col[0]},${col[1]},${col[2]})`;
+    if(trails){ cx.fillStyle="rgba(238,242,248,0.26)"; cx.fillRect(0,0,boxW,boxH); }
+    else{ cx.clearRect(0,0,boxW,boxH); }
+    // faint warm/cool tint of the box
+    cx.fillStyle = f>0.5 ? `rgba(224,138,43,${0.05+0.06*f})` : `rgba(30,42,74,${0.04})`;
+    if(!trails) cx.fillRect(0,0,boxW,boxH);
+    cx.fillStyle=rgb;
+    cx.shadowColor=rgb; cx.shadowBlur=trails?0:6;
+    for(const p of parts){
+      cx.beginPath(); cx.arc(p.x,p.y,R,0,7); cx.fill();
+    }
+    cx.shadowBlur=0;
+    // tag color + text
+    const tag=document.getElementById('stageTag');
+    tag.style.color=rgb;
+    tag.textContent = T<200?"cool" : T<520?"warm" : "hot";
+  }
+
+  // ---- distribution panel ----
+  const dc=document.getElementById('dist'), dx=dc.getContext('2d');
+  const DW=620, DH=220, PAD=26;
+  function drawDist(){
+    dx.clearRect(0,0,DW,DH);
+    // fixed speed axis so the shift is visible across the whole range
+    const vmaxAxis=Math.sqrt(2*K_SIM*Tmax)*3.1;
+    const nb=26, bins=new Array(nb).fill(0);
+    for(const p of parts){
+      const v=Math.hypot(p.vx,p.vy);
+      let idx=Math.floor(v/vmaxAxis*nb); if(idx<0)idx=0; if(idx>=nb)idx=nb-1;
+      bins[idx]++;
+    }
+    const bw=(DW-2*PAD)/nb;
+    const maxCount=Math.max(4,...bins);
+    const f=tempFrac(), col=lerpCol(f);
+    const rgb=`rgb(${col[0]},${col[1]},${col[2]})`;
+    // baseline
+    dx.strokeStyle="#d6ddea"; dx.lineWidth=1;
+    dx.beginPath(); dx.moveTo(PAD,DH-PAD); dx.lineTo(DW-PAD,DH-PAD); dx.stroke();
+    // bars
+    dx.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},0.32)`;
+    for(let i=0;i<nb;i++){
+      const h=(bins[i]/maxCount)*(DH-2*PAD);
+      dx.fillRect(PAD+i*bw+1, DH-PAD-h, bw-2, h);
+    }
+    // theoretical 2-D Maxwell (Rayleigh) curve from measured <v^2>
+    const s2=meanV2()/2;                    // sigma^2 = <v^2>/2 in 2-D
+    dx.strokeStyle=rgb; dx.lineWidth=2.5; dx.beginPath();
+    let peak=0;
+    const fv=v=> (v/s2)*Math.exp(-v*v/(2*s2));
+    for(let k=0;k<=200;k++){ const v=k/200*vmaxAxis; peak=Math.max(peak,fv(v)); }
+    for(let k=0;k<=200;k++){
+      const v=k/200*vmaxAxis;
+      const x=PAD+(v/vmaxAxis)*(DW-2*PAD);
+      const y=DH-PAD-(fv(v)/peak)*(DH-2*PAD)*0.94;
+      k===0?dx.moveTo(x,y):dx.lineTo(x,y);
+    }
+    dx.stroke();
+    // axis labels
+    dx.fillStyle="#8592a8"; dx.font="12px Calibri,sans-serif";
+    dx.fillText("molecular speed  →", PAD, DH-6);
+    dx.save(); dx.translate(12,DH-PAD); dx.rotate(-Math.PI/2);
+    dx.fillText("# of molecules", 0, 0); dx.restore();
+  }
+
+  // ---- readouts ----
+  function updateReadouts(){
+    const keRel = T/300;                       // KE ∝ T, normalized to room temp
+    const vRel  = Math.sqrt(T/300);            // v_rms ∝ √T
+    document.getElementById('keVal').textContent=keRel.toFixed(keRel<10?2:1);
+    document.getElementById('vVal').textContent=vRel.toFixed(2);
+    document.getElementById('keBar').style.width=Math.min(100,(T/Tmax)*100)+"%";
+    document.getElementById('vBar').style.width=Math.min(100,Math.sqrt(T/Tmax)*100)+"%";
+    document.getElementById('tempVal').textContent=Math.round(T);
+  }
+
+  // ---- controls ----
+  const slider=document.getElementById('temp');
+  slider.addEventListener('input',()=>{ setTemperature(+slider.value); updateReadouts(); });
+  document.querySelectorAll('.presets button').forEach(b=>{
+    b.addEventListener('click',()=>{ const t=+b.dataset.t; slider.value=t; setTemperature(t); updateReadouts(); });
+  });
+  document.getElementById('trails').addEventListener('change',e=>{ trails=e.target.checked; });
+
+  // ---- responsive canvas sizing ----
+  function fit(){
+    const w=cv.parentElement.clientWidth;
+    const scale=w/boxW; cv.style.height=(boxH*scale)+"px";
+    const dw=dc.parentElement.clientWidth||DW; dc.style.width="100%"; dc.style.height=(DH*(dw/DW))+"px";
+  }
+  window.addEventListener('resize',fit);
+
+  // ---- loop ----
+  let last=performance.now();
+  function loop(now){
+    let dt=(now-last)/16.67; last=now;
+    if(dt>3)dt=3;                    // clamp after tab-switch
+    step(dt); draw(); drawDist();
+    requestAnimationFrame(loop);
+  }
+
+  init(); setTemperature(120); updateReadouts(); fit();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

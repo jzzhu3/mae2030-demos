@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAE 2030 · Interactive Demos</title>
+<style>
+  :root{
+    --navy:#1E2A4A; --orange:#E08A2B; --ice:#EEF2F8; --cream:#FBEEE0;
+    --ink:#25303f; --line:#d6ddea;
+    --head:"Bookman Old Style","Bookman",Georgia,serif;
+    --body:"Calibri","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{font-family:var(--body);color:var(--ink);background:var(--ice);min-height:100vh}
+  header{background:var(--navy);color:#fff;padding:20px 26px}
+  header h1{font-family:var(--head);font-weight:700;margin:0;font-size:clamp(20px,3vw,30px)}
+  header .sub{color:#b9c6e0;font-size:14px;margin-top:4px}
+  .wrap{max-width:820px;margin:26px auto;padding:0 22px}
+  a.demo{
+    display:block;text-decoration:none;color:inherit;
+    background:#fff;border:1px solid var(--line);border-left:5px solid var(--orange);
+    border-radius:14px;padding:18px 20px;margin-bottom:14px;transition:.15s;
+  }
+  a.demo:hover{box-shadow:0 4px 14px rgba(30,42,74,.10);transform:translateY(-1px)}
+  a.demo h2{font-family:var(--head);color:var(--navy);margin:0 0 4px;font-size:19px}
+  a.demo p{margin:0;font-size:14px;color:#6b7891;line-height:1.45}
+  a.demo .go{color:var(--orange);font-weight:600;font-size:13px;margin-top:8px;display:inline-block}
+  footer{max-width:820px;margin:0 auto 30px;padding:0 22px;color:#8592a8;font-size:12.5px}
+</style>
+</head>
+<body>
+<header>
+  <h1>MAE 2030 · Interactive Demos</h1>
+  <div class="sub">Introduction to Aerospace Engineering · in-class simulations</div>
+</header>
+<div class="wrap">
+  <a class="demo" href="kinetic-temperature/">
+    <h2>Temperature &amp; Molecular Motion</h2>
+    <p>Kinetic theory of gases: drag the temperature and watch molecular speed scale as √T, with a live Maxwell–Boltzmann distribution.</p>
+    <span class="go">Open demo →</span>
+  </a>
+</div>
+<footer>University of Virginia · Mechanical &amp; Aerospace Engineering</footer>
+</body>
+</html>
