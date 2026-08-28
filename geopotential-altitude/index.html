@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Geopotential vs Geometric Altitude — MAE 2030</title>
+<style>
+  :root{
+    --navy:#1E2A4A; --orange:#E08A2B; --ice:#EEF2F8; --cream:#FBEEE0;
+    --hg:#2E8B57;      /* geometric altitude - green */
+    --h:#C0392B;       /* geopotential altitude - red */
+    --g:#2E5496;       /* gravity - blue */
+    --g0:#7D3C98;      /* g0 constant - purple */
+    --grid:#d3dae6;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--ice);color:var(--navy);
+    font-family:"Segoe UI",Calibri,system-ui,sans-serif;}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 20px 40px;}
+  header{border-bottom:3px solid var(--orange);padding-bottom:10px;margin-bottom:14px;}
+  h1{font-family:"Bookman Old Style",Georgia,serif;font-size:24px;margin:0 0 2px;}
+  .sub{font-size:14px;color:#54607a;}
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  @media(max-width:900px){.panels{grid-template-columns:1fr;}}
+  .card{background:#fff;border:1px solid #dbe2ee;border-radius:10px;
+    box-shadow:0 1px 4px rgba(30,42,74,.06);padding:12px 14px 8px;}
+  .card h2{font-size:15px;margin:0 0 6px;font-weight:700;}
+  canvas{width:100%;height:360px;display:block;}
+  .controls{background:#fff;border:1px solid #dbe2ee;border-radius:10px;
+    padding:14px 18px;margin:16px 0;box-shadow:0 1px 4px rgba(30,42,74,.06);}
+  .ctrl-row{display:grid;grid-template-columns:180px 1fr 120px;gap:14px;align-items:center;
+    margin-bottom:12px;}
+  .ctrl-row:last-child{margin-bottom:0;}
+  .ctrl-row label{font-size:14px;font-weight:600;}
+  .ctrl-row .val{font-size:14px;font-variant-numeric:tabular-nums;text-align:right;
+    background:var(--cream);border-radius:6px;padding:3px 8px;}
+  input[type=range]{width:100%;accent-color:var(--orange);}
+  .readout{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;}
+  @media(max-width:700px){.readout{grid-template-columns:1fr;}}
+  .ro{background:var(--ice);border:1px solid #d5deec;border-radius:8px;padding:10px 12px;}
+  .ro .t{font-size:12px;color:#54607a;margin-bottom:3px;}
+  .ro .v{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .ro.identity{background:#eef7f0;border-color:#bfe0c8;grid-column:1/-1;}
+  .ro.identity .v{font-size:16px;color:#1e6b3a;}
+  .eqbadge{display:inline-block;padding:1px 7px;border-radius:5px;font-size:12.5px;
+    font-weight:700;margin-right:6px;}
+  .legend{font-size:12.5px;color:#54607a;margin:2px 0 6px;}
+  .legend span{display:inline-block;margin-right:14px;}
+  .legend i{display:inline-block;width:22px;height:3px;vertical-align:middle;margin-right:4px;border-radius:2px;}
+  .note{font-size:12.5px;color:#54607a;margin-top:6px;line-height:1.5;}
+  .foot{font-size:12px;color:#7c869c;margin-top:18px;text-align:center;}
+  code{background:#f1f4fa;padding:1px 5px;border-radius:4px;font-size:12.5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Geopotential vs Geometric Altitude</h1>
+    <div class="sub">MAE 2030 · Standard Atmosphere · why <code>g₀ dh ≡ g dh<sub>G</sub></code> and how the 1% gap grows with height</div>
+  </header>
+
+  <div class="panels">
+    <div class="card">
+      <h2>Altitude &amp; gravity vs sample point</h2>
+      <div class="legend">
+        <span><i style="background:var(--hg)"></i>h<sub>G</sub> geometric</span>
+        <span><i style="background:var(--h)"></i>h geopotential</span>
+        <span><i style="background:var(--g)"></i>g gravity</span>
+        <span><i style="background:var(--g0)"></i>g₀ constant</span>
+      </div>
+      <canvas id="mainCanvas" height="360"></canvas>
+      <div class="note">Left axis: altitude (km). Right axis: gravity (m/s²). The vertical marker is the point you're inspecting.</div>
+    </div>
+
+    <div class="card">
+      <h2>Verification: g₀·dh vs g·dh<sub>G</sub></h2>
+      <div class="legend">
+        <span><i style="background:var(--orange)"></i>g₀·dh</span>
+        <span><i style="background:var(--g)"></i>g·dh<sub>G</sub></span>
+        <span style="color:#1e6b3a"><i style="background:#2E8B57"></i>ratio ≈ 1</span>
+      </div>
+      <canvas id="verifyCanvas" height="360"></canvas>
+      <div class="note">The two products coincide at every point — that's the identity, made visible.</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl-row">
+      <label>Inspect point (index)</label>
+      <input type="range" id="ptSlider" min="0" max="999" value="500">
+      <div class="val" id="ptVal">500</div>
+    </div>
+    <div class="ctrl-row">
+      <label>Gap magnification ×</label>
+      <input type="range" id="magSlider" min="1" max="50" value="1">
+      <div class="val" id="magVal">1×</div>
+    </div>
+    <div class="ctrl-row">
+      <label>Top altitude H<sub>top</sub> (km)</label>
+      <input type="range" id="topSlider" min="10" max="300" value="50" step="5">
+      <div class="val" id="topVal">50 km</div>
+    </div>
+
+    <div class="readout">
+      <div class="ro"><div class="t">Geometric altitude h<sub>G</sub></div><div class="v" id="roHG">—</div></div>
+      <div class="ro"><div class="t">Geopotential altitude h</div><div class="v" id="roH">—</div></div>
+      <div class="ro"><div class="t">Gap  h<sub>G</sub> − h</div><div class="v" id="roGap">—</div></div>
+      <div class="ro"><div class="t">Gravity g at this point</div><div class="v" id="roG">—</div></div>
+      <div class="ro"><div class="t">g₀ (sea-level, constant)</div><div class="v" id="roG0">9.80665 m/s²</div></div>
+      <div class="ro"><div class="t">dh<sub>G</sub> (step, geometric)</div><div class="v" id="roDhg">—</div></div>
+      <div class="ro identity">
+        <div class="t">Identity check at this point</div>
+        <div class="v" id="roIdentity">—</div>
+      </div>
+    </div>
+    <div class="note" id="magNote"></div>
+  </div>
+
+  <div class="foot">MAE 2030 — Introduction to Aerospace Engineering · r = 6356.766 km (Earth), g₀ = 9.80665 m/s²</div>
+</div>
+
+<script>
+// ---------- constants ----------
+const r  = 6356766;      // m, Earth effective radius
+const g0 = 9.80665;      // m/s^2
+const N  = 1000;
+
+// ---------- state ----------
+let Htop = 50000;        // m, adjustable
+let pt   = 500;          // inspected index
+let mag  = 1;            // gap magnification
+
+// ---------- element refs ----------
+const ptSlider=document.getElementById('ptSlider'),
+      magSlider=document.getElementById('magSlider'),
+      topSlider=document.getElementById('topSlider'),
+      ptVal=document.getElementById('ptVal'),
+      magVal=document.getElementById('magVal'),
+      topVal=document.getElementById('topVal');
+
+const roHG=document.getElementById('roHG'), roH=document.getElementById('roH'),
+      roGap=document.getElementById('roGap'), roG=document.getElementById('roG'),
+      roDhg=document.getElementById('roDhg'), roIdentity=document.getElementById('roIdentity'),
+      magNote=document.getElementById('magNote');
+
+const mainC=document.getElementById('mainCanvas'), mctx=mainC.getContext('2d');
+const verC=document.getElementById('verifyCanvas'), vctx=verC.getContext('2d');
+
+// ---------- physics helpers ----------
+const hG_of = i => i*Htop/(N-1);              // geometric altitude at index i
+const h_of  = hg => r*hg/(r+hg);              // geopotential altitude
+const g_of  = hg => g0*Math.pow(r/(r+hg),2);  // gravity
+
+// ---------- DPI-aware sizing ----------
+// Logical (CSS) height is FIXED here and in CSS (canvas{height:360px}).
+// We never read the height back from the element — reading a value we just
+// wrote is what made the frame grow on every redraw.
+const LOGICAL_H = 360;
+function fitCanvas(c){
+  const dpr=window.devicePixelRatio||1;
+  const w=c.clientWidth;      // driven by CSS width:100% of the card — stable
+  const h=LOGICAL_H;          // constant — never derived from the buffer
+  const bw=Math.round(w*dpr), bh=Math.round(h*dpr);
+  if(c.width!==bw)  c.width=bw;    // only touch the buffer when it actually changed
+  if(c.height!==bh) c.height=bh;
+  const ctx=c.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {w,h};
+}
+
+// ---------- main chart ----------
+function drawMain(){
+  const {w,h}=fitCanvas(mainC);
+  mctx.clearRect(0,0,w,h);
+  const L=52,R=52,T=14,B=34;               // margins (two y-axes)
+  const pw=w-L-R, ph=h-T-B;
+
+  const HtopKm=Htop/1000;
+  // gravity axis range (dynamic to Htop)
+  const gMin=g_of(Htop), gMax=g0;
+  const gLo=gMin-(gMax-gMin)*0.15, gHi=gMax+(gMax-gMin)*0.15;
+
+  const xPix = i => L + pw*i/(N-1);
+  const yAlt = km => T + ph*(1 - km/HtopKm);
+  const yGrv = gv => T + ph*(1 - (gv-gLo)/(gHi-gLo));
+
+  // grid
+  mctx.strokeStyle=getCSS('--grid'); mctx.lineWidth=1; mctx.font='11px Segoe UI';
+  mctx.textAlign='right'; mctx.textBaseline='middle';
+  const nY=6;
+  for(let k=0;k<=nY;k++){
+    const y=T+ph*k/nY;
+    mctx.beginPath();mctx.moveTo(L,y);mctx.lineTo(L+pw,y);mctx.stroke();
+    const kmv=HtopKm*(1-k/nY);
+    mctx.fillStyle='#54607a';mctx.fillText(kmv.toFixed(0),L-6,y);
+    const gv=gLo+(gHi-gLo)*(1-k/nY);
+    mctx.textAlign='left';mctx.fillStyle='#54607a';mctx.fillText(gv.toFixed(2),L+pw+6,y);
+    mctx.textAlign='right';
+  }
+  // x ticks
+  mctx.textAlign='center';mctx.textBaseline='top';
+  for(let xi=0;xi<=1000;xi+=200){
+    const x=xPix(xi);
+    mctx.strokeStyle=getCSS('--grid');mctx.beginPath();mctx.moveTo(x,T);mctx.lineTo(x,T+ph);mctx.stroke();
+    mctx.fillStyle='#54607a';mctx.fillText(xi,x,T+ph+6);
+  }
+  // axis titles
+  mctx.save();mctx.translate(12,T+ph/2);mctx.rotate(-Math.PI/2);
+  mctx.textAlign='center';mctx.fillStyle=getCSS('--navy');mctx.font='12px Segoe UI';
+  mctx.fillText('Altitude (km)',0,0);mctx.restore();
+  mctx.save();mctx.translate(w-10,T+ph/2);mctx.rotate(Math.PI/2);
+  mctx.textAlign='center';mctx.fillStyle=getCSS('--g');mctx.fillText('Gravity (m/s²)',0,0);mctx.restore();
+  mctx.textAlign='center';mctx.fillStyle='#54607a';mctx.font='11px Segoe UI';
+  mctx.fillText('Point index (0–999, uniform in h_G, 0→'+HtopKm.toFixed(0)+' km)',L+pw/2,h-13);
+
+  // curves
+  // h_G (green straight)
+  line(mctx,i=>xPix(i),i=>yAlt(hG_of(i)/1000),getCSS('--hg'),2.4);
+  // h geopotential, with magnified gap: plot hG - mag*(hG-h)
+  line(mctx,i=>xPix(i),i=>{const hg=hG_of(i);const hh=h_of(hg);
+      const shown=(hg - mag*(hg-hh))/1000; return yAlt(shown);},getCSS('--h'),2.4);
+  // gravity (blue)
+  line(mctx,i=>xPix(i),i=>yGrv(g_of(hG_of(i))),getCSS('--g'),2.4);
+  // g0 (purple dashed)
+  mctx.setLineDash([6,4]);
+  line(mctx,i=>xPix(i),()=>yGrv(g0),getCSS('--g0'),2.2);
+  mctx.setLineDash([]);
+
+  // inspected-point marker
+  const xm=xPix(pt);
+  mctx.strokeStyle='rgba(30,42,74,.35)';mctx.lineWidth=1.5;mctx.setLineDash([4,3]);
+  mctx.beginPath();mctx.moveTo(xm,T);mctx.lineTo(xm,T+ph);mctx.stroke();mctx.setLineDash([]);
+  const hgP=hG_of(pt), hP=h_of(hgP);
+  dot(mctx,xm,yAlt(hgP/1000),getCSS('--hg'));
+  dot(mctx,xm,yAlt((hgP-mag*(hgP-hP))/1000),getCSS('--h'));
+  dot(mctx,xm,yGrv(g_of(hgP)),getCSS('--g'));
+}
+
+// ---------- verification chart ----------
+function drawVerify(){
+  const {w,h}=fitCanvas(verC);
+  vctx.clearRect(0,0,w,h);
+  const L=58,R=16,T=14,B=34;
+  const pw=w-L-R, ph=h-T-B;
+
+  // compute increments
+  const dx=Htop/(N-1);
+  // value range for products (m^2/s^2): near g0*dx down to g(top)*dx
+  const pMax=g0*dx, pMin=g_of(Htop)*dx;
+  const lo=pMin-(pMax-pMin)*0.4, hi=pMax+(pMax-pMin)*0.4;
+
+  const xPix=i=>L+pw*i/(N-1);
+  const yP=v=>T+ph*(1-(v-lo)/(hi-lo));
+
+  // grid + left axis (product) ; we show ratio on same panel scaled to [0..1.2] using right conceptually,
+  // but to keep it simple: draw products (left axis labels) and a ratio line mapped to top band.
+  vctx.strokeStyle=getCSS('--grid');vctx.lineWidth=1;vctx.font='11px Segoe UI';
+  vctx.textAlign='right';vctx.textBaseline='middle';
+  const nY=6;
+  for(let k=0;k<=nY;k++){
+    const y=T+ph*k/nY;
+    vctx.beginPath();vctx.moveTo(L,y);vctx.lineTo(L+pw,y);vctx.stroke();
+    const val=lo+(hi-lo)*(1-k/nY);
+    vctx.fillStyle='#54607a';vctx.fillText(val.toFixed(1),L-6,y);
+  }
+  vctx.textAlign='center';vctx.textBaseline='top';
+  for(let xi=0;xi<=1000;xi+=200){
+    const x=xPix(xi);
+    vctx.strokeStyle=getCSS('--grid');vctx.beginPath();vctx.moveTo(x,T);vctx.lineTo(x,T+ph);vctx.stroke();
+    vctx.fillStyle='#54607a';vctx.fillText(xi,x,T+ph+6);
+  }
+  vctx.save();vctx.translate(14,T+ph/2);vctx.rotate(-Math.PI/2);
+  vctx.textAlign='center';vctx.fillStyle=getCSS('--navy');vctx.font='12px Segoe UI';
+  vctx.fillText('increment  (m²/s²)',0,0);vctx.restore();
+  vctx.textAlign='center';vctx.fillStyle='#54607a';vctx.font='11px Segoe UI';
+  vctx.fillText('Point index',L+pw/2,h-13);
+
+  // products: from step 1..N-1
+  // g0*dh  (orange, thick)
+  lineRange(vctx,1,N-1,i=>xPix(i),i=>{
+     const hgA=hG_of(i-1),hgB=hG_of(i);
+     const dh=h_of(hgB)-h_of(hgA);
+     return yP(g0*dh);
+  },getCSS('--orange'),4);
+  // g*dhG  (blue dashed)
+  vctx.setLineDash([6,4]);
+  lineRange(vctx,1,N-1,i=>xPix(i),i=>{
+     const hgA=hG_of(i-1),hgB=hG_of(i);
+     const gmid=(g_of(hgA)+g_of(hgB))/2;
+     return yP(gmid*dx);
+  },getCSS('--g'),1.6);
+  vctx.setLineDash([]);
+
+  // marker at inspected point
+  if(pt>=1){
+    const x=xPix(pt);
+    vctx.strokeStyle='rgba(30,42,74,.35)';vctx.setLineDash([4,3]);
+    vctx.beginPath();vctx.moveTo(x,T);vctx.lineTo(x,T+ph);vctx.stroke();vctx.setLineDash([]);
+    const hgA=hG_of(pt-1),hgB=hG_of(pt);
+    const dh=h_of(hgB)-h_of(hgA);
+    dot(vctx,x,yP(g0*dh),getCSS('--orange'));
+  }
+}
+
+// ---------- drawing utils ----------
+function line(ctx,fx,fy,color,lw){
+  ctx.strokeStyle=color;ctx.lineWidth=lw;ctx.beginPath();
+  for(let i=0;i<N;i++){const x=fx(i),y=fy(i);i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+  ctx.stroke();
+}
+function lineRange(ctx,a,b,fx,fy,color,lw){
+  ctx.strokeStyle=color;ctx.lineWidth=lw;ctx.beginPath();
+  let first=true;
+  for(let i=a;i<=b;i++){const x=fx(i),y=fy(i);first?ctx.moveTo(x,y):ctx.lineTo(x,y);first=false;}
+  ctx.stroke();
+}
+function dot(ctx,x,y,color){ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,4,0,7);ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();}
+function getCSS(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+// ---------- readouts ----------
+function updateReadouts(){
+  const hg=hG_of(pt), hh=h_of(hg), gg=g_of(hg), gap=hg-hh;
+  const dx=Htop/(N-1);
+  roHG.textContent=(hg/1000).toFixed(3)+' km';
+  roH.textContent=(hh/1000).toFixed(3)+' km';
+  roGap.textContent=gap.toFixed(1)+' m  ('+(hg>0?(gap/hg*100).toFixed(3):'0.000')+'%)';
+  roG.textContent=gg.toFixed(5)+' m/s²';
+  roDhg.textContent=dx.toFixed(2)+' m';
+
+  if(pt>=1){
+    const hgA=hG_of(pt-1),hgB=hG_of(pt);
+    const dh=h_of(hgB)-h_of(hgA);
+    const gmid=(g_of(hgA)+g_of(hgB))/2;
+    const lhs=g0*dh, rhs=gmid*dx;
+    roIdentity.innerHTML=
+      '<span class="eqbadge" style="background:#fbe6d4;color:#a55b12">g₀·dh = '+lhs.toFixed(3)+'</span>'+
+      '<span class="eqbadge" style="background:#e3ecf8;color:#204a86">g·dh_G = '+rhs.toFixed(3)+'</span>'+
+      ' &nbsp;ratio = '+(lhs/rhs).toFixed(8);
+  } else {
+    roIdentity.innerHTML='<span style="color:#54607a">move off index 0 — a step needs a previous point</span>';
+  }
+}
+
+function updateMagNote(){
+  if(mag<=1){magNote.innerHTML='At ×1 the two altitude curves overlap — that\u2019s the real message: below ~50 km, h ≈ h<sub>G</sub> to within ~1%.';}
+  else{magNote.innerHTML='Gap magnified ×'+mag+': the red curve pulls <b>below</b> geometric — geopotential altitude is a non-linearly compressed height ruler. (Only the red curve is exaggerated; readouts show true values.)';}
+}
+
+// ---------- wire up ----------
+function redraw(){drawMain();drawVerify();updateReadouts();}
+ptSlider.addEventListener('input',e=>{pt=+e.target.value;ptVal.textContent=pt;redraw();});
+magSlider.addEventListener('input',e=>{mag=+e.target.value;magVal.textContent=mag+'×';updateMagNote();drawMain();});
+topSlider.addEventListener('input',e=>{Htop=(+e.target.value)*1000;topVal.textContent=e.target.value+' km';redraw();});
+window.addEventListener('resize',redraw);
+
+updateMagNote();redraw();
+</script>
+</body>
+</html>
