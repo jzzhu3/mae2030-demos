@@ -173,6 +173,7 @@
     }
   }
 
+
   function render(){
     const bx = bandPx();
     ctx.clearRect(0,0,W,H);
@@ -181,25 +182,7 @@
     ctx.fillStyle = COL.ice;   ctx.fillRect(0,0,bx,H);
     ctx.fillStyle = COL.cream; ctx.fillRect(bx,0,W-bx,H);
 
-    // region labels
-    ctx.textAlign='left'; ctx.textBaseline='top';
-    ctx.font='700 13px Calibri,sans-serif'; ctx.fillStyle=COL.muted;
-    ctx.fillText('AHEAD · region 1  (undisturbed)', 18, 14);
-    ctx.font='italic 26px "Bookman Old Style",Georgia,serif';
-    ctx.fillStyle=COL.navy;
-    ctx.fillText('p', 24, 44); ctx.fillText('ρ', 24, 78); ctx.fillText('T', 24, 112);
-
-    ctx.textAlign='right';
-    ctx.font='700 13px Calibri,sans-serif'; ctx.fillStyle=COL.orange;
-    ctx.fillText('BEHIND · region 2  (slightly changed)', W-18, 14);
-    ctx.font='italic 26px "Bookman Old Style",Georgia,serif';
-    ctx.fillStyle=COL.navy;
-    ctx.fillText('p + dp', W-24, 44);
-    ctx.fillText('ρ + dρ', W-24, 78);
-    ctx.fillText('T + dT', W-24, 112);
-    ctx.textAlign='left';
-
-    // molecules
+    // molecules (drawn first; labels sit on top with backing panels)
     for(const m of mols){
       const compressed = m.x > bandX;
       const px = m.x*W;
@@ -220,6 +203,24 @@
     ctx.fillStyle = COL.navy; ctx.textAlign='center';
     ctx.font='italic 14px Calibri,sans-serif';
     ctx.fillText('sound wave', bx, H-30);
+
+    // region labels (drawn on top of molecules; orange values contrast with navy dots)
+    ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.font='700 13px Calibri,sans-serif'; ctx.fillStyle=COL.navy;
+    ctx.fillText('AHEAD · region 1  (undisturbed)', 18, 14);
+    ctx.font='italic 700 26px "Bookman Old Style",Georgia,serif';
+    ctx.fillStyle=COL.orange;
+    ctx.fillText('p', 24, 44); ctx.fillText('ρ', 24, 78); ctx.fillText('T', 24, 112);
+
+    ctx.textAlign='right';
+    ctx.font='700 13px Calibri,sans-serif'; ctx.fillStyle=COL.navy;
+    ctx.fillText('BEHIND · region 2  (slightly changed)', W-18, 14);
+    ctx.font='italic 700 26px "Bookman Old Style",Georgia,serif';
+    ctx.fillStyle=COL.orange;
+    ctx.fillText('p + dp', W-24, 44);
+    ctx.fillText('ρ + dρ', W-24, 78);
+    ctx.fillText('T + dT', W-24, 112);
+    ctx.textAlign='left';
 
     // velocity arrows depend on frame
     const midY = H*0.5;
