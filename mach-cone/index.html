@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mach Number & Wavefronts</title>
+<style>
+  :root{ --navy:#232D4B; --orange:#E57200; --ice:#EEF2F8; --cream:#FBEEE0; --muted:#5b6478; }
+  *{box-sizing:border-box;}
+  body{margin:0; background:#fff; color:var(--navy);
+    font-family:Calibri,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:960px;margin:0 auto;padding:22px 20px 34px;}
+  .eyebrow{display:inline-block;background:var(--orange);color:#fff;font-weight:700;
+    font-size:12px;letter-spacing:1.5px;padding:5px 14px;border-radius:20px;margin-bottom:12px;}
+  h1{font-family:"Bookman Old Style",Georgia,serif;font-size:26px;margin:0 0 2px;}
+  .sub{color:var(--muted);font-size:16px;margin:0 0 16px;}
+  .stage{position:relative;width:100%;border:1px solid #dfe4ee;border-radius:14px;overflow:hidden;background:var(--ice);}
+  canvas{display:block;width:100%;height:auto;}
+  .readout{position:absolute;top:14px;left:16px;font-size:15px;color:var(--navy);
+    background:rgba(255,255,255,.82);border-radius:8px;padding:8px 12px;line-height:1.5;}
+  .readout b{font-size:18px;}
+  .regime{font-weight:700;}
+  .controls{margin-top:18px;}
+  .clabel{font-weight:700;margin-bottom:8px;}
+  /* the slider and the ticks share the SAME full-width track so they line up */
+  .track{position:relative;width:100%;}
+  input[type=range]{width:100%;margin:0;display:block;accent-color:var(--orange);height:6px;}
+  .ticks{position:relative;height:18px;margin-top:6px;font-size:12px;color:var(--muted);}
+  .ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap;}
+  .caption{margin-top:16px;padding:14px 18px;background:var(--cream);
+    border-left:4px solid var(--orange);border-radius:6px;font-size:15.5px;line-height:1.5;min-height:24px;}
+  .caption b{color:var(--navy);}
+  .foot{margin-top:14px;color:var(--muted);font-size:12.5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="eyebrow">PUT IT TO WORK</span>
+  <h1>Mach number: does the flow outrun its own sound?</h1>
+  <p class="sub">A source emits sound in all directions at speed <i>a</i>. Slide <i>M = V/a</i> and watch the wavefronts.</p>
+
+  <div class="stage">
+    <canvas id="c"></canvas>
+    <div class="readout">
+      <div>M = V/a = <b id="mval">0.60</b></div>
+      <div class="regime" id="regime"></div>
+      <div id="angle"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="clabel">Mach number M</div>
+    <div class="track">
+      <input type="range" id="slider" min="0" max="2.5" step="0.05" value="0.6">
+      <div class="ticks" id="ticks"></div>
+    </div>
+  </div>
+
+  <div class="caption" id="caption"></div>
+
+  <p class="foot">MAE 2030 &middot; Speed of Sound &nbsp;|&nbsp; Wavefronts expand at the speed of sound a; the source moves at V = M&middot;a.</p>
+</div>
+
+<script>
+(function(){
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  const slider=document.getElementById('slider');
+  const mval=document.getElementById('mval'), regimeEl=document.getElementById('regime'),
+        angleEl=document.getElementById('angle'), capEl=document.getElementById('caption');
+  const COL={navy:'#232D4B',orange:'#E57200',axis:'#c3ccdc'};
+
+  // ticks live in .track (same full width as the slider) -> aligned; thumb inset ~ half a thumb
+  const TH=8; // half thumb width (px)
+  const TICKS=[[0,'0'],[0.5,'0.5'],[1,'1.0 (sonic)'],[1.5,'1.5'],[2,'2.0'],[2.5,'2.5']];
+  const ticksEl=document.getElementById('ticks');
+  TICKS.forEach(function(tk){ var s=document.createElement('span');
+    s.textContent=tk[1];
+    s.style.left='calc('+TH+'px + '+(tk[0]/2.5)+' * (100% - '+(2*TH)+'px))';
+    ticksEl.appendChild(s); });
+
+  let W=920,H=430,DPR=1;
+  function resize(){
+    const cssW=cv.parentNode.clientWidth;
+    const oldW=W; W=cssW; H=Math.round(cssW*0.47);
+    DPR=window.devicePixelRatio||1;
+    cv.width=W*DPR; cv.height=H*DPR; cv.style.height=H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    if(oldW) srcX*=W/oldW;
+  }
+
+  // FLYING MODEL, ONE constant-frequency emission series (single family -> no moire).
+  const aPix=120, EMIT_DT=0.40;   // ring radius step = aPix*EMIT_DT = 48 px
+  const CAP=10;
+  let M=parseFloat(slider.value);
+  let srcX=0, t=0, emitAcc=0, wf=[], last=performance.now();
+
+  function prefill(){
+    // lay CAP rings behind the source on the SAME cadence as live emission (phase-continuous)
+    wf=[];
+    const V=M*aPix;
+    for(let k=CAP;k>=1;k--){
+      wf.push({ x: srcX - V*(k*EMIT_DT), t0: t - k*EMIT_DT });
+    }
+    emitAcc=0;
+  }
+
+  slider.addEventListener('input',function(){
+    M=parseFloat(slider.value); mval.textContent=M.toFixed(2); updateText(); prefill();
+  });
+
+  function updateText(){
+    var name,col,cap;
+    if(M<0.98){ name='Subsonic  \u00b7  M < 1'; col=COL.navy;
+      cap='<b>Subsonic.</b> The source stays inside its own wavefronts. Waves bunch up ahead and spread out behind (the Doppler effect) \u2014 but sound still reaches every point ahead, so the flow "hears" what is coming and adjusts smoothly.'; }
+    else if(M<=1.02){ name='Sonic  \u00b7  M = 1'; col=COL.orange;
+      cap='<b>Mach 1.</b> The source keeps pace with its own sound: every wavefront is tangent at the nose, piling into a single front. Sound can no longer outrun the source ahead \u2014 the onset of compressibility.'; }
+    else { name='Supersonic  \u00b7  M > 1'; col=COL.orange;
+      cap='<b>Supersonic.</b> The source outruns its sound. Wavefronts fall behind and their envelope is the <b>Mach cone</b>, half-angle \u03bc with sin \u03bc = 1/M. Nothing ahead of the cone hears the source coming \u2014 the basis of shock waves.'; }
+    regimeEl.textContent=name; regimeEl.style.color=col;
+    if(M>1.02){ var mu=Math.asin(1/M)*180/Math.PI;
+      angleEl.innerHTML='Mach angle \u03bc = arcsin(1/M) = '+mu.toFixed(1)+'\u00b0'; }
+    else angleEl.textContent='';
+    capEl.innerHTML=cap;
+  }
+
+  function step(dt){
+    t+=dt;
+    const V=M*aPix;
+    srcX+=V*dt;
+    if(srcX>W*0.9){ srcX=W*0.1; prefill(); return; }
+    emitAcc+=dt;
+    while(emitAcc>=EMIT_DT){ emitAcc-=EMIT_DT; wf.push({x:srcX,t0:t});
+      while(wf.length>CAP) wf.shift(); }
+  }
+
+  function render(){
+    const ax=H*0.5;
+    ctx.clearRect(0,0,W,H);
+
+    ctx.strokeStyle=COL.axis; ctx.lineWidth=1.5; ctx.setLineDash([7,6]);
+    ctx.beginPath(); ctx.moveTo(0,ax); ctx.lineTo(W,ax); ctx.stroke(); ctx.setLineDash([]);
+
+    if(M>1.02){
+      const mu=Math.asin(1/M), L=W*1.7;
+      const dx=-Math.cos(mu)*L, dy=Math.sin(mu)*L;
+      ctx.fillStyle='rgba(229,114,0,0.08)';
+      ctx.beginPath(); ctx.moveTo(srcX,ax); ctx.lineTo(srcX+dx,ax-dy); ctx.lineTo(srcX+dx,ax+dy); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle=COL.orange; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.moveTo(srcX,ax); ctx.lineTo(srcX+dx,ax-dy);
+      ctx.moveTo(srcX,ax); ctx.lineTo(srcX+dx,ax+dy); ctx.stroke();
+    }
+
+    const maxR=W*1.4;
+    const minR=aPix*EMIT_DT*0.9;   // hide the sub-ring-spacing circles crowding the apex
+    for(const w of wf){
+      const r=aPix*(t-w.t0);
+      if(r<minR) continue;
+      const alpha=Math.max(0.16, 1-r/maxR);
+      ctx.strokeStyle=COL.navy; ctx.globalAlpha=alpha; ctx.lineWidth=1.8;
+      ctx.beginPath(); ctx.arc(w.x,ax,r,0,Math.PI*2); ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+
+    ctx.fillStyle=COL.orange;
+    ctx.beginPath(); ctx.moveTo(srcX+12,ax); ctx.lineTo(srcX-7,ax-8); ctx.lineTo(srcX-7,ax+8); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
+  }
+
+  function loop(now){
+    const dt=Math.min(0.05,(now-last)/1000); last=now;
+    step(dt); render();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('resize',resize);
+  resize(); srcX=W*0.1; prefill(); mval.textContent=M.toFixed(2); updateText();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
