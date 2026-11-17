@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finite Wings: Tip Vortices, Downwash &amp; Induced Drag</title>
+<style>
+  :root { --navy:#1E2A4A; --orange:#E08A2B; --ice:#EEF2F8; --cream:#FBEEE0; --grey:#6b7280; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Calibri, "Segoe UI", system-ui, sans-serif; color:var(--navy); background:#fff; }
+  header { background:var(--navy); color:#fff; padding:14px 20px; }
+  header .eyebrow { color:var(--orange); font-size:13px; letter-spacing:.12em; font-weight:700; text-transform:uppercase; }
+  header h1 { margin:2px 0 0; font-family:"Bookman Old Style", Georgia, serif; font-size:22px; font-weight:600; }
+  main { max-width:1200px; margin:0 auto; padding:16px; }
+  .controls { display:flex; flex-wrap:wrap; gap:14px 28px; background:var(--ice); border-radius:12px; padding:14px 18px; align-items:center; }
+  .ctl { display:flex; flex-direction:column; min-width:220px; flex:1; }
+  .ctl label { font-size:16px; font-weight:700; display:flex; justify-content:space-between; }
+  .ctl label span { color:var(--orange); font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; accent-color:var(--orange); }
+  .chk { font-size:16px; display:flex; align-items:center; gap:6px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+  @media (max-width:820px){ .grid { grid-template-columns:1fr; } }
+  .card { border:1px solid #d7deea; border-radius:12px; padding:12px; background:#fff; }
+  .card h2 { margin:0 0 6px; font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--orange); }
+  canvas { width:100%; display:block; border-radius:8px; }
+  .bars { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .barGroup h3 { margin:4px 0 8px; font-size:16px; }
+  .row { display:flex; align-items:center; gap:8px; margin:6px 0; font-size:16px; }
+  .row .lab { width:78px; font-family:"Cambria Math", serif; }
+  .track { flex:1; height:22px; background:var(--ice); border-radius:6px; position:relative; overflow:hidden; }
+  .fill { position:absolute; top:0; bottom:0; left:0; border-radius:6px; }
+  .val { width:70px; text-align:right; font-variant-numeric:tabular-nums; }
+  table { width:100%; border-collapse:collapse; font-size:16px; }
+  td { padding:4px 6px; border-bottom:1px solid #eef0f4; }
+  td.n { text-align:right; font-variant-numeric:tabular-nums; font-weight:700; }
+  .eq { font-family:"Cambria Math", serif; }
+  .note { font-size:14px; color:var(--grey); margin-top:8px; line-height:1.4; }
+  .legend { display:flex; flex-wrap:wrap; gap:12px; font-size:14px; margin-top:6px; }
+  .legend i { display:inline-block; width:14px; height:4px; border-radius:2px; margin-right:4px; vertical-align:middle; }
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">MAE 2030 · Anderson §5.13</div>
+  <h1>Finite Wings: Tip Vortices, Downwash &amp; Induced Drag</h1>
+</header>
+<main>
+  <div class="controls">
+    <div class="ctl">
+      <label>Aspect ratio AR = b²/S <span id="arVal"></span></label>
+      <input id="ar" type="range" min="2" max="30" step="0.5" value="6">
+    </div>
+    <div class="ctl">
+      <label>Geometric angle of attack α <span id="aVal"></span></label>
+      <input id="alpha" type="range" min="-4" max="12" step="0.5" value="6">
+    </div>
+    <label class="chk"><input id="inf" type="checkbox"> Infinite wing (AR → ∞)</label>
+    <label class="chk"><input id="exag" type="checkbox" checked> Exaggerate α<sub>i</sub> ×3 in side view</label>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Front view · trailing vortices (qualitative)</h2>
+      <canvas id="front"></canvas>
+      <div class="note">Looking upstream at the wing. Flow leaks from the high-pressure lower surface around each tip to the low-pressure upper surface, rolling up into two counter-rotating vortices. Between the tips they induce a downward velocity: the <b>downwash</b> w. Vortex strength scales with w/V<sub>∞</sub> = C<sub>L</sub>/(π AR).</div>
+    </div>
+    <div class="card">
+      <h2>Side view · local airfoil section (Fig. 5.45)</h2>
+      <canvas id="side"></canvas>
+      <div class="legend">
+        <span><i style="background:#1E2A4A"></i>V<sub>∞</sub> (free stream)</span>
+        <span><i style="background:#3b82f6"></i>Local relative wind</span>
+        <span><i style="background:#E08A2B"></i>Local lift (⊥ local wind)</span>
+        <span><i style="background:#c0392b"></i>Induced drag D<sub>i</sub></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Airfoil vs. finite wing (NACA 2412)</h2>
+      <div class="bars">
+        <div class="barGroup">
+          <h3>Lift coefficient</h3>
+          <div class="row"><span class="lab">c<sub>l</sub> airfoil</span><div class="track"><div id="bcl" class="fill" style="background:#9aa6bf"></div></div><span id="vcl" class="val"></span></div>
+          <div class="row"><span class="lab">C<sub>L</sub> wing</span><div class="track"><div id="bCL" class="fill" style="background:var(--navy)"></div></div><span id="vCL" class="val"></span></div>
+        </div>
+        <div class="barGroup">
+          <h3>Drag coefficient</h3>
+          <div class="row"><span class="lab">c<sub>d</sub> airfoil</span><div class="track"><div id="bcd" class="fill" style="background:#9aa6bf"></div></div><span id="vcd" class="val"></span></div>
+          <div class="row"><span class="lab">C<sub>D</sub> wing</span><div class="track"><div id="bCDp" class="fill" style="background:#9aa6bf"></div><div id="bCDi" class="fill" style="background:#c0392b"></div></div><span id="vCD" class="val"></span></div>
+          <div class="note" style="margin-top:2px">Grey = profile drag c<sub>d</sub>; red = induced drag C<sub>D,i</sub></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Numbers</h2>
+      <table>
+        <tr><td>Induced angle of attack α<sub>i</sub></td><td class="n" id="tai"></td></tr>
+        <tr><td>Effective angle α<sub>eff</sub> = α − α<sub>i</sub></td><td class="n" id="taeff"></td></tr>
+        <tr><td>Downwash ratio w/V<sub>∞</sub></td><td class="n" id="tw"></td></tr>
+        <tr><td>Lift slope a<sub>0</sub> → a (per deg)</td><td class="n" id="tslope"></td></tr>
+        <tr><td>Induced drag C<sub>D,i</sub> = C<sub>L</sub>²/(π e AR)</td><td class="n" id="tcdi"></td></tr>
+        <tr><td>L/D: airfoil → wing</td><td class="n" id="tld"></td></tr>
+      </table>
+      <div class="note">Elliptic lift distribution (e = 1). Airfoil data: a<sub>0</sub> ≈ 0.106/deg, α<sub>L=0</sub> ≈ −2°, c<sub>d</sub> = 0.0077 held fixed (App. D values at α = 6°).<br>
+      <span class="eq">a = a<sub>0</sub> / (1 + 57.3 a<sub>0</sub>/(π e AR))</span>, &nbsp;
+      <span class="eq">α<sub>i</sub> = 57.3 C<sub>L</sub>/(π e AR)</span> [deg], &nbsp;
+      <span class="eq">C<sub>D</sub> = c<sub>d</sub> + C<sub>L</sub>²/(π e AR)</span></div>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  const A0 = 0.85 / 8;      // per deg: cl(6°) = 0.85 with αL0 = −2°
+  const AL0 = -2.0;         // deg
+  const CD0 = 0.0077;       // profile drag (held constant)
+  const E = 1.0;
+  const RAD = 180 / Math.PI;
+
+  const $ = id => document.getElementById(id);
+  const arEl = $('ar'), aEl = $('alpha'), infEl = $('inf'), exEl = $('exag');
+
+  let S = {};
+  function compute() {
+    const alpha = +aEl.value;
+    const inf = infEl.checked;
+    const AR = +arEl.value;
+    const cl = A0 * (alpha - AL0);
+    let a, CL, ai, CDi;
+    if (inf) { a = A0; CL = cl; ai = 0; CDi = 0; }
+    else {
+      a = A0 / (1 + RAD * A0 / (Math.PI * E * AR));
+      CL = a * (alpha - AL0);
+      ai = RAD * CL / (Math.PI * E * AR);
+      CDi = CL * CL / (Math.PI * E * AR);
+    }
+    S = { alpha, inf, AR, cl, a, CL, ai, CDi, CD: CD0 + CDi, k: inf ? 0 : CL / (Math.PI * AR) };
+    render();
+  }
+
+  function render() {
+    $('arVal').textContent = S.inf ? '∞' : S.AR.toFixed(1);
+    arEl.disabled = S.inf;
+    $('aVal').textContent = S.alpha.toFixed(1) + '°';
+    const fmt = (x, d) => x.toFixed(d);
+    // bars
+    const LMAX = 1.6, DMAX = 0.12;
+    const pct = (x, m) => Math.max(0, Math.min(100, 100 * x / m)) + '%';
+    $('bcl').style.width = pct(S.cl, LMAX); $('vcl').textContent = fmt(S.cl, 3);
+    $('bCL').style.width = pct(S.CL, LMAX); $('vCL').textContent = fmt(S.CL, 3);
+    $('bcd').style.width = pct(CD0, DMAX); $('vcd').textContent = fmt(CD0, 4);
+    $('bCDp').style.width = pct(CD0, DMAX);
+    $('bCDi').style.left = pct(CD0, DMAX); $('bCDi').style.width = pct(S.CDi, DMAX);
+    $('vCD').textContent = fmt(S.CD, 4);
+    // table
+    $('tai').textContent = fmt(S.ai, 2) + '°';
+    $('taeff').textContent = fmt(S.alpha - S.ai, 2) + '°';
+    $('tw').textContent = fmt(S.k, 4);
+    $('tslope').textContent = fmt(A0, 4) + ' → ' + fmt(S.a, 4);
+    $('tcdi').textContent = fmt(S.CDi, 4);
+    const ldA = S.cl / CD0, ldW = S.CL / S.CD;
+    $('tld').textContent = fmt(ldA, 0) + ' → ' + fmt(ldW, 1);
+    drawSide();
+  }
+
+  // ---------- canvas helpers ----------
+  function setup(cv, aspect) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = cv.clientWidth, h = Math.round(w * aspect);
+    cv.width = w * dpr; cv.height = h * dpr; cv.style.height = h + 'px';
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w, h };
+  }
+  function arrow(ctx, x0, y0, x1, y1, color, lw = 3, head = 10) {
+    const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy);
+    if (L < 2) return;
+    const ux = dx / L, uy = dy / L;
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 - ux * head * 0.8, y1 - uy * head * 0.8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - ux * head - uy * head * 0.5, y1 - uy * head + ux * head * 0.5);
+    ctx.lineTo(x1 - ux * head + uy * head * 0.5, y1 - uy * head - ux * head * 0.5);
+    ctx.closePath(); ctx.fill();
+  }
+  function label(ctx, t, x, y, color = '#1E2A4A', size = 15, align = 'left', font = 'Calibri, sans-serif', bg = true) {
+    ctx.font = `${size}px ${font}`; ctx.textAlign = align; ctx.textBaseline = 'middle';
+    if (bg) {
+      const tw = ctx.measureText(t).width, x0 = align === 'center' ? x - tw / 2 : align === 'right' ? x - tw : x;
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(x0 - 3, y - size * 0.6, tw + 6, size * 1.2);
+    }
+    ctx.fillStyle = color; ctx.fillText(t, x, y);
+  }
+
+  // ---------- side view ----------
+  const sideCv = $('side');
+  let side;
+  function naca2412() {
+    const m = 0.02, p = 0.4, t = 0.12, N = 60, up = [], lo = [];
+    for (let i = 0; i <= N; i++) {
+      const x = 0.5 * (1 - Math.cos(Math.PI * i / N));
+      const yt = 5 * t * (0.2969 * Math.sqrt(x) - 0.126 * x - 0.3516 * x * x + 0.2843 * x ** 3 - 0.1036 * x ** 4);
+      let yc, dyc;
+      if (x < p) { yc = m / (p * p) * (2 * p * x - x * x); dyc = 2 * m / (p * p) * (p - x); }
+      else { yc = m / ((1 - p) ** 2) * (1 - 2 * p + 2 * p * x - x * x); dyc = 2 * m / ((1 - p) ** 2) * (p - x); }
+      const th = Math.atan(dyc);
+      up.push([x - yt * Math.sin(th), yc + yt * Math.cos(th)]);
+      lo.push([x + yt * Math.sin(th), yc - yt * Math.cos(th)]);
+    }
+    return up.concat(lo.reverse());
+  }
+  const FOIL = naca2412();
+
+  function drawSide() {
+    side = setup(sideCv, 0.62);
+    const { ctx, w, h } = side;
+    ctx.clearRect(0, 0, w, h);
+    const chord = w * 0.46, cx = w * 0.52, cy = h * 0.50;
+    const a = S.alpha / RAD;
+    const ex = exEl.checked ? 3 : 1;
+    const aiD = S.ai * ex / RAD;
+
+    // airfoil, pivot at quarter chord
+    ctx.beginPath();
+    FOIL.forEach(([x, y], i) => {
+      const xr = x - 0.25;
+      const X = xr * Math.cos(a) + y * Math.sin(a);
+      const Y = -xr * Math.sin(a) + y * Math.cos(a);
+      const px = cx + X * chord, py = cy - Y * chord;
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    });
+    ctx.closePath(); ctx.fillStyle = '#EEF2F8'; ctx.fill();
+    ctx.strokeStyle = '#1E2A4A'; ctx.lineWidth = 2; ctx.stroke();
+    // chord line (dashed) extended upstream for α
+    ctx.setLineDash([5, 4]); ctx.strokeStyle = '#9aa6bf'; ctx.lineWidth = 1.2;
+    const le = [cx - 0.25 * chord * Math.cos(a), cy - 0.25 * chord * Math.sin(a)];
+    ctx.beginPath(); ctx.moveTo(le[0] - 0.55 * chord * Math.cos(a), le[1] - 0.55 * chord * Math.sin(a));
+    ctx.lineTo(cx + 0.75 * chord * Math.cos(a), cy + 0.75 * chord * Math.sin(a)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // free stream & local wind, from a point upstream
+    const ox = w * 0.06, oy = h * 0.80, Lw = w * 0.50;
+    arrow(ctx, ox, oy, ox + Lw, oy, '#1E2A4A', 3);
+    label(ctx, 'V∞', ox + Lw * 0.30, oy - 16, '#1E2A4A', 16, 'center', 'Cambria Math, serif');
+    if (!S.inf && Math.abs(aiD) > 1e-4) {
+      arrow(ctx, ox, oy, ox + Lw * Math.cos(aiD), oy + Lw * Math.sin(aiD), '#3b82f6', 3);
+      // w component
+      ctx.setLineDash([4, 3]);
+      arrow(ctx, ox + Lw * Math.cos(aiD), oy, ox + Lw * Math.cos(aiD), oy + Lw * Math.sin(aiD), '#3b82f6', 1.5, 7);
+      ctx.setLineDash([]);
+      label(ctx, 'w', ox + Lw * Math.cos(aiD) + 8, oy + Lw * Math.sin(aiD) / 2 + 2, '#3b82f6', 15, 'left', 'Cambria Math, serif');
+      // αi arc
+      ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(ox, oy, Lw * 0.6, 0, aiD, aiD < 0); ctx.stroke();
+      label(ctx, 'αᵢ' + (ex > 1 ? ' (×3)' : ''), ox + Lw * 0.25, oy + Lw * 0.6 * Math.sin(aiD) + 16, '#3b82f6', 14, 'left', 'Cambria Math, serif');
+    }
+
+    // α arc at leading edge between horizontal and chord
+    const R = chord * 0.45;
+    ctx.strokeStyle = '#1E2A4A'; ctx.lineWidth = 1.2;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(le[0] - R * 1.2, le[1]); ctx.lineTo(le[0], le[1]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(le[0], le[1], R, Math.PI, Math.PI + a, a < 0); ctx.stroke();
+    label(ctx, 'α = ' + S.alpha.toFixed(1) + '°', le[0] - R - 6, le[1] - R * Math.sin(a) / 2 - 12, '#1E2A4A', 14, 'right', 'Cambria Math, serif');
+
+    // lift vector at quarter chord, ⊥ local wind (tilted back by αi)
+    const Lmag = h * 0.40 * Math.max(-1, Math.min(1.4, S.CL / 1.0));
+    const lx = Lmag * Math.sin(aiD), ly = Lmag * Math.cos(aiD);
+    arrow(ctx, cx, cy, cx + lx, cy - ly, '#E08A2B', 4, 12);
+    label(ctx, S.inf ? 'Lift' : 'Local lift', cx + lx + 8, cy - ly + 4, '#E08A2B', 15);
+    if (!S.inf && Math.abs(lx) > 1) {
+      ctx.setLineDash([4, 3]); ctx.strokeStyle = '#9aa6bf'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - ly); ctx.lineTo(cx + lx, cy - ly); ctx.stroke(); ctx.setLineDash([]);
+      label(ctx, 'L', cx - 8, cy - ly * 0.55, '#1E2A4A', 15, 'right', 'Cambria Math, serif');
+      arrow(ctx, cx, cy - ly, cx + lx, cy - ly, '#c0392b', 3, 9);
+      label(ctx, 'Dᵢ', cx + lx / 2, cy - ly - 14, '#c0392b', 15, 'center', 'Cambria Math, serif');
+    }
+    if (S.inf) label(ctx, 'Infinite wing: no downwash, lift ⊥ V∞, no induced drag', w / 2, h - 14, '#6b7280', 14, 'center');
+    else if (ex > 1) label(ctx, 'Angles αᵢ exaggerated ×3 for visibility', w / 2, h - 14, '#6b7280', 13, 'center');
+  }
+
+  // ---------- front view (particles) ----------
+  const frontCv = $('front');
+  let F, parts = [];
+  const RC = 0.13;
+  function initFront() {
+    F = setup(frontCv, 0.62);
+    F.sc = F.w / 3.4;
+    F.ox = F.w / 2; F.oy = F.h * 0.45;
+    parts = Array.from({ length: 900 }, spawn);
+    F.ctx.fillStyle = '#fff'; F.ctx.fillRect(0, 0, F.w, F.h);
+  }
+  function spawn() {
+    return { x: (Math.random() - 0.5) * F.w / F.sc, y: (Math.random() - 0.5) * F.h / F.sc - (F.oy - F.h / 2) / F.sc * 0,
+             life: 1 + Math.random() * 3 };
+  }
+  // velocity from two tip vortices (Lamb–Oseen cores); right tip CCW, left tip CW (math coords, y up)
+  function vel(x, y, G) {
+    let u = 0, v = 0;
+    for (const [x0, sgn] of [[1, 1], [-1, -1]]) {
+      const dx = x - x0, dy = y, r2 = dx * dx + dy * dy + 1e-9;
+      const f = sgn * G / (2 * Math.PI * r2) * (1 - Math.exp(-r2 / (RC * RC)));
+      u += -f * dy; v += f * dx;
+    }
+    return [u, v];
+  }
+  let last = performance.now();
+  function frame(t) {
+    const dt = Math.min(0.05, (t - last) / 1000); last = t;
+    const { ctx, w, h, sc, ox, oy } = F;
+    ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fillRect(0, 0, w, h);
+    const G = S.k * 34;
+    ctx.fillStyle = 'rgba(30,42,74,0.75)';
+    for (const p of parts) {
+      if (G !== 0) {
+        // RK2
+        const [u1, v1] = vel(p.x, p.y, G);
+        const [u2, v2] = vel(p.x + u1 * dt / 2, p.y + v1 * dt / 2, G);
+        p.x += u2 * dt; p.y += v2 * dt;
+      }
+      p.life -= dt;
+      const px = ox + p.x * sc, py = oy - p.y * sc;
+      if (p.life < 0 || px < 0 || px > w || py < 0 || py > h) {
+        Object.assign(p, spawn()); p.y = (Math.random() * h - oy) / -sc; continue;
+      }
+      ctx.fillRect(px - 1, py - 1, 2, 2);
+    }
+    // wing (front view lens)
+    const half = sc, th = 6;
+    ctx.fillStyle = '#1E2A4A';
+    ctx.beginPath(); ctx.moveTo(ox - half, oy);
+    ctx.quadraticCurveTo(ox, oy - th * 2, ox + half, oy);
+    ctx.quadraticCurveTo(ox, oy + th * 2, ox - half, oy); ctx.fill();
+    label(ctx, 'Low pressure', ox, oy - 22, '#1E2A4A', 14, 'center');
+    label(ctx, 'High pressure', ox, oy + 22, '#1E2A4A', 14, 'center');
+    if (S.k !== 0) {
+      // uniform downwash arrows (elliptic loading)
+      const len = Math.max(-60, Math.min(60, S.k * 900));
+      for (let i = -3; i <= 3; i++) {
+        const x = ox + i * half * 0.22;
+        arrow(ctx, x, oy + 38, x, oy + 38 + len, '#E08A2B', 2.5, 8);
+      }
+      label(ctx, 'downwash w', ox + half * 0.75, oy + 38 + len / 2, '#E08A2B', 14, 'left');
+      // tip markers
+      for (const [x0, s] of [[1, 1], [-1, -1]]) {
+        ctx.strokeStyle = '#E08A2B'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(ox + x0 * sc, oy, RC * sc * 1.6, 0, 2 * Math.PI); ctx.stroke();
+      }
+      label(ctx, 'tip vortex', ox + sc, oy - RC * sc * 1.6 - 12, '#E08A2B', 13, 'center');
+      label(ctx, 'tip vortex', ox - sc, oy - RC * sc * 1.6 - 12, '#E08A2B', 13, 'center');
+    } else {
+      label(ctx, S.inf ? 'Infinite wing: no tips → no trailing vortices' : 'C_L = 0: no lift → no tip vortices',
+            w / 2, h - 16, '#6b7280', 14, 'center');
+    }
+    requestAnimationFrame(frame);
+  }
+
+  [arEl, aEl, infEl, exEl].forEach(el => el.addEventListener('input', compute));
+  window.addEventListener('resize', () => { initFront(); render(); });
+  initFront(); compute(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
